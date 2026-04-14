@@ -1,8 +1,3 @@
-// Must be first — overrides system DNS with Google's to resolve Atlas SRV records
-const dns = require('dns');
-dns.setServers(['8.8.8.8', '8.8.4.4', '1.1.1.1']);
-dns.setDefaultResultOrder('ipv4first');
-
 require('dotenv').config();
 const express = require('express');
 const http = require('http');
