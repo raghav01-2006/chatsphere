@@ -6,6 +6,7 @@
   "type": "commonjs",
   "scripts": {
     "start": "node index.js",
+    "build": "echo 'Build complete'",
     "dev": "nodemon index.js"
   },
   "dependencies": {

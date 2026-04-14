@@ -81,3 +81,5 @@ server.listen(PORT, () => {
   console.log(`📡 Socket.IO ready`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV}`);
 });
+
+module.exports = app;
