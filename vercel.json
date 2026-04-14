@@ -1,15 +1,15 @@
 {
-  "version": 3,
+  "version": 2,
   "builds": [
     {
       "src": "client/package.json",
       "use": "@vercel/static-build"
     }
   ],
-  "rewrites": [
+  "routes": [
     {
-      "source": "/(.*)",
-      "destination": "/index.html"
+      "src": "/(.*)",
+      "dest": "/index.html"
     }
   ]
 }
