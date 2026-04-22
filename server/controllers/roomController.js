@@ -1,6 +1,7 @@
 const Room = require('../models/Room');
 const Message = require('../models/Message');
 const User = require('../models/User');
+const Notification = require('../models/Notification');
 const { v4: uuidv4 } = require('uuid');
 
 // @desc    Get all accessible rooms
@@ -71,11 +72,16 @@ const getRoomById = async (req, res) => {
     const room = await Room.findById(req.params.id)
       .populate('members', 'username avatar isOnline status level xp')
       .populate('admins', 'username avatar')
+      .populate('pendingRequests', 'username avatar level isOnline')
       .populate('pinnedMessages')
       .populate('createdBy', 'username avatar');
 
     if (!room) return res.status(404).json({ success: false, message: 'Room not found' });
-    if (room.isPrivate && !room.members.some(m => m._id.toString() === req.user._id.toString())) {
+    
+    const isMember = room.members.some(m => m._id.toString() === req.user._id.toString());
+    const isAdmin = req.user.isAdmin;
+
+    if (room.isPrivate && !isMember && !isAdmin) {
       return res.status(403).json({ success: false, message: 'Access denied' });
     }
 
@@ -200,4 +206,109 @@ const createOrGetDM = async (req, res) => {
   }
 };
 
-module.exports = { getRooms, getMyRooms, createRoom, getRoomById, getRoomMessages, joinRoom, joinByInviteCode, leaveRoom, createOrGetDM };
+// @desc    Request to join private room
+// @route   POST /api/rooms/:id/request-join
+const requestJoinRoom = async (req, res) => {
+  try {
+    const room = await Room.findById(req.params.id);
+    if (!room) return res.status(404).json({ success: false, message: 'Room not found' });
+
+    if (room.members.includes(req.user._id)) {
+      return res.status(400).json({ success: false, message: 'Already a member' });
+    }
+
+    if (room.pendingRequests.includes(req.user._id)) {
+      return res.status(400).json({ success: false, message: 'Request already pending' });
+    }
+
+    room.pendingRequests.push(req.user._id);
+    await room.save();
+
+    // Notify room admins/creator
+    const adminIds = room.admins && room.admins.length > 0 ? room.admins : [room.createdBy];
+    
+    for (const adminId of adminIds) {
+      await Notification.create({
+        recipient: adminId,
+        sender: req.user._id,
+        type: 'system',
+        title: 'New Join Request',
+        content: `${req.user.username} wants to join your room: ${room.name}`,
+        link: `/chat/${room._id}`,
+        icon: '🎟️'
+      });
+    }
+
+    res.json({ success: true, message: 'Join request sent' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Accept join request
+// @route   POST /api/rooms/:id/requests/:userId/accept
+const acceptJoinRequest = async (req, res) => {
+  try {
+    const room = await Room.findById(req.params.id);
+    if (!room) return res.status(404).json({ success: false, message: 'Room not found' });
+
+    // Check if requester is admin/creator of the room
+    const isRoomAdmin = room.admins.includes(req.user._id) || room.createdBy.toString() === req.user._id.toString();
+    if (!isRoomAdmin && !req.user.isAdmin) {
+      return res.status(403).json({ success: false, message: 'Not authorized to manage requests' });
+    }
+
+    if (!room.pendingRequests.includes(req.params.userId)) {
+      return res.status(400).json({ success: false, message: 'Request not found' });
+    }
+
+    // Add to members
+    room.pendingRequests = room.pendingRequests.filter(id => id.toString() !== req.params.userId);
+    if (!room.members.includes(req.params.userId)) {
+      room.members.push(req.params.userId);
+    }
+    await room.save();
+
+    // Notify user
+    await Notification.create({
+      recipient: req.params.userId,
+      sender: req.user._id,
+      type: 'system',
+      title: 'Join Request Accepted',
+      content: `Your request to join ${room.name} has been accepted!`,
+      link: `/chat/${room._id}`,
+      icon: '✅'
+    });
+
+    res.json({ success: true, message: 'Join request accepted' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Reject join request
+// @route   POST /api/rooms/:id/requests/:userId/reject
+const rejectJoinRequest = async (req, res) => {
+  try {
+    const room = await Room.findById(req.params.id);
+    if (!room) return res.status(404).json({ success: false, message: 'Room not found' });
+
+    const isRoomAdmin = room.admins.includes(req.user._id) || room.createdBy.toString() === req.user._id.toString();
+    if (!isRoomAdmin && !req.user.isAdmin) {
+      return res.status(403).json({ success: false, message: 'Not authorized to manage requests' });
+    }
+
+    room.pendingRequests = room.pendingRequests.filter(id => id.toString() !== req.params.userId);
+    await room.save();
+
+    res.json({ success: true, message: 'Join request rejected' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+module.exports = { 
+  getRooms, getMyRooms, createRoom, getRoomById, getRoomMessages, 
+  joinRoom, joinByInviteCode, leaveRoom, createOrGetDM,
+  requestJoinRoom, acceptJoinRequest, rejectJoinRequest
+};

@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
-  MessageSquare, Compass, Trophy, Zap, LayoutDashboard,
-  Plus, Hash, Users, ChevronDown, ChevronRight, Settings, LogOut
+  MessageSquare, Compass, Trophy, Zap, LayoutDashboard, Search,
+  Plus, Hash, Users, ChevronDown, ChevronRight, Settings, LogOut, Shield
 } from 'lucide-react';
 import useAuthStore from '../store/authStore';
 import useChatStore from '../store/chatStore';
@@ -10,6 +10,7 @@ import { getAvatarFallback, generateColor, getLevelProgress, formatXP, getLevelN
 
 const NAV_ITEMS = [
   { to: '/dashboard',   icon: LayoutDashboard, label: 'Dashboard' },
+  { to: '/discover',    icon: Search,          label: 'Discover' },
   { to: '/communities', icon: Compass,         label: 'Communities' },
   { to: '/quiz',        icon: Zap,             label: 'Daily Quiz' },
   { to: '/leaderboard', icon: Trophy,          label: 'Leaderboard' },
@@ -98,6 +99,15 @@ const Sidebar = () => {
             <span>{item.label}</span>
           </NavLink>
         ))}
+        {user?.isAdmin && (
+          <NavLink
+            to="/admin"
+            className={({ isActive }) => `sidebar-item ${isActive ? 'active border-l-2 border-white' : 'text-white/80 font-semibold'}`}
+          >
+            <Shield size={15} />
+            <span>Admin Panel</span>
+          </NavLink>
+        )}
       </nav>
 
       <div className="divider mx-3" />

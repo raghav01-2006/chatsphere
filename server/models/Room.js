@@ -11,6 +11,7 @@ const roomSchema = new mongoose.Schema({
   avatar: { type: String, default: '' },
   members: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   admins: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  pendingRequests: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   isPrivate: { type: Boolean, default: false },
   inviteCode: { type: String, unique: true, sparse: true },

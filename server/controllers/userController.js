@@ -22,11 +22,13 @@ const getUserById = async (req, res) => {
 // @route   GET /api/users/search?q=
 const searchUsers = async (req, res) => {
   try {
-    const { q } = req.query;
+    const { q, query } = req.query;
+    const searchTerm = q || query || '';
+
     const users = await User.find({
       $or: [
-        { username: { $regex: q, $options: 'i' } },
-        { email: { $regex: q, $options: 'i' } },
+        { username: { $regex: searchTerm, $options: 'i' } },
+        { email: { $regex: searchTerm, $options: 'i' } },
       ],
       _id: { $ne: req.user._id },
     }).select('username avatar level xp isOnline status').limit(20);

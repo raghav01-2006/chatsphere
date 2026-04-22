@@ -20,6 +20,9 @@ import QuizPage from './pages/QuizPage';
 import LeaderboardPage from './pages/LeaderboardPage';
 import ProfilePage from './pages/ProfilePage';
 import SettingsPage from './pages/SettingsPage';
+import AdminPage from './pages/AdminPage';
+import DiscoverPage from './pages/DiscoverPage';
+import AdminRoute from './components/auth/AdminRoute';
 
 // ─── Protected route ─────────────────────────────────────────────────────────
 const ProtectedRoute = ({ children }) => {
@@ -156,8 +159,10 @@ const App = () => {
           <Route path="communities/post/:id" element={<PostDetailPage />} />
           <Route path="quiz" element={<QuizPage />} />
           <Route path="leaderboard" element={<LeaderboardPage />} />
+          <Route path="discover" element={<DiscoverPage />} />
           <Route path="profile/:id" element={<ProfilePage />} />
           <Route path="settings" element={<SettingsPage />} />
+          <Route path="admin" element={<AdminRoute><AdminPage /></AdminRoute>} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

@@ -5,10 +5,18 @@ const api = axios.create({
   withCredentials: true,
 });
 
-// Attach JWT token to every request
+// Attach JWT token to every request from Zustand store
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('cs_token');
-  if (token) config.headers.Authorization = `Bearer ${token}`;
+  try {
+    const authStorage = localStorage.getItem('auth-storage');
+    if (authStorage) {
+      const { state } = JSON.parse(authStorage);
+      const token = state?.token;
+      if (token) config.headers.Authorization = `Bearer ${token}`;
+    }
+  } catch (error) {
+    console.error('Error reading auth token:', error);
+  }
   return config;
 });
 
@@ -17,8 +25,7 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('cs_token');
-      localStorage.removeItem('cs_user');
+      localStorage.removeItem('auth-storage');
       window.location.href = '/login';
     }
     return Promise.reject(error);

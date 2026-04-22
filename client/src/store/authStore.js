@@ -14,7 +14,6 @@ const useAuthStore = create(
         try {
           const res = await api.post('/auth/register', data);
           const { token, user } = res.data;
-          api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
           set({ token, user, loading: false });
           return { success: true };
         } catch (err) {
@@ -28,7 +27,6 @@ const useAuthStore = create(
         try {
           const res = await api.post('/auth/login', data);
           const { token, user } = res.data;
-          api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
           set({ token, user, loading: false });
           return { success: true };
         } catch (err) {
@@ -48,7 +46,6 @@ const useAuthStore = create(
         const { token } = get();
         if (!token) return;
         try {
-          api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
           const res = await api.get('/auth/me');
           set({ user: res.data.user });
         } catch (err) {

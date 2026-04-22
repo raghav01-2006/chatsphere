@@ -108,7 +108,12 @@ const MessageBubble = ({ message, isOwn, currentUser, onReaction, onReply, onEdi
       <div className={`flex flex-col max-w-[68%] ${isOwn ? 'items-end' : 'items-start'}`}>
         {/* Sender name */}
         {!isOwn && (
-          <span className="text-[11px] text-text-muted mb-0.5 ml-1 font-medium">{message.sender?.username}</span>
+          <div className="flex items-center gap-1.5 mb-0.5 ml-1">
+            <span className="text-[11px] text-text-muted font-medium">{message.sender?.username}</span>
+            {message.sender?.isAdmin && (
+              <span className="text-[9px] px-1 bg-white/10 text-white font-black rounded border border-white/10">ADMIN</span>
+            )}
+          </div>
         )}
 
         {/* Reply preview */}
@@ -216,10 +221,16 @@ const DateSeparator = ({ date }) => {
 };
 
 // ─── Online Users Panel ───────────────────────────────────────────────────────
-const OnlineUsersPanel = ({ room, onlineUsers, onDM }) => {
+const OnlineUsersPanel = ({ room, onlineUsers, onDM, currentUser, onAccept, onReject }) => {
   if (!room?.members) return null;
   const online = room.members.filter(m => onlineUsers.has(m._id));
   const offline = room.members.filter(m => !onlineUsers.has(m._id));
+  const pending = room.pendingRequests || [];
+
+  const isRoomAdmin = room.admins?.some(a => a._id === currentUser?._id || a === currentUser?._id) || 
+                      room.createdBy?._id === currentUser?._id || 
+                      room.createdBy === currentUser?._id ||
+                      currentUser?.isAdmin;
 
   return (
     <div className="w-52 flex-shrink-0 border-l border-border-subtle flex flex-col bg-bg-secondary">
@@ -227,15 +238,52 @@ const OnlineUsersPanel = ({ room, onlineUsers, onDM }) => {
         <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider">Members — {room.members.length}</h3>
       </div>
       <div className="flex-1 overflow-y-auto scrollbar-none py-2">
+        {/* Pending Requests Section */}
+        {isRoomAdmin && pending.length > 0 && (
+          <div className="mb-4">
+            <p className="section-header mb-1 text-warning flex items-center gap-1.5">
+              <Zap size={10} /> Pending — {pending.length}
+            </p>
+            {pending.map(m => (
+              <div key={m._id || m} className="w-full flex items-center gap-2 px-3 py-2 group">
+                <Avatar user={m} size={6} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-[11px] font-medium truncate">{m.username || 'User'}</p>
+                </div>
+                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button 
+                    onClick={() => onAccept(m._id || m)}
+                    className="w-5 h-5 rounded bg-success/20 text-success flex items-center justify-center hover:bg-success hover:text-black transition-all"
+                    title="Accept"
+                  >
+                    <CheckCircle size={10} />
+                  </button>
+                  <button 
+                    onClick={() => onReject(m._id || m)}
+                    className="w-5 h-5 rounded bg-error/20 text-error flex items-center justify-center hover:bg-error hover:text-black transition-all"
+                    title="Reject"
+                  >
+                    <XCircle size={10} />
+                  </button>
+                </div>
+              </div>
+            ))}
+            <div className="divider mx-3 opacity-50" />
+          </div>
+        )}
+
         {online.length > 0 && (
           <>
             <p className="section-header mb-1">Online — {online.length}</p>
             {online.map(m => (
               <button key={m._id} onClick={() => onDM(m._id)}
-                className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-accent-glow rounded-lg transition-colors">
+                className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-accent-glow rounded-lg transition-colors text-left">
                 <Avatar user={m} size={6} showOnline onlineUsers={onlineUsers} />
-                <div className="flex-1 min-w-0 text-left">
-                  <p className="text-xs font-medium truncate">{m.username}</p>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <p className="text-xs font-medium truncate">{m.username}</p>
+                    {m.isAdmin && <span className="flex-shrink-0 text-[8px] px-1 bg-white/10 text-white font-black rounded">ADMIN</span>}
+                  </div>
                   <p className="text-[10px] text-success">Online</p>
                 </div>
               </button>
@@ -247,9 +295,12 @@ const OnlineUsersPanel = ({ room, onlineUsers, onDM }) => {
             <p className="section-header mt-3 mb-1 opacity-60">Offline — {offline.length}</p>
             {offline.map(m => (
               <button key={m._id} onClick={() => onDM(m._id)}
-                className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-accent-glow rounded-lg transition-colors opacity-50">
+                className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-accent-glow rounded-lg transition-colors opacity-50 text-left">
                 <Avatar user={m} size={6} showOnline onlineUsers={onlineUsers} />
-                <p className="text-xs truncate">{m.username}</p>
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <p className="text-xs truncate">{m.username}</p>
+                  {m.isAdmin && <span className="flex-shrink-0 text-[8px] px-1 bg-white/10 text-white font-black rounded">ADMIN</span>}
+                </div>
               </button>
             ))}
           </>
@@ -410,6 +461,38 @@ const ChatPage = () => {
     }
   };
 
+  const handleRequestJoin = async () => {
+    try {
+      const res = await api.post(`/rooms/${roomId}/request-join`);
+      toast.success(res.data.message || 'Join request sent!');
+      // Refresh room info to show pending status
+      api.get(`/rooms/${roomId}`).then(res => setRoomInfo(res.data.room));
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to send request');
+    }
+  };
+
+  const handleAcceptRequest = async (userId) => {
+    try {
+      await api.post(`/rooms/${roomId}/requests/${userId}/accept`);
+      toast.success('Member joined!');
+      // Refresh room
+      api.get(`/rooms/${roomId}`).then(res => setRoomInfo(res.data.room));
+    } catch {
+      toast.error('Failed to accept request');
+    }
+  };
+
+  const handleRejectRequest = async (userId) => {
+    try {
+      await api.post(`/rooms/${roomId}/requests/${userId}/reject`);
+      toast.success('Request rejected');
+      api.get(`/rooms/${roomId}`).then(res => setRoomInfo(res.data.room));
+    } catch {
+      toast.error('Failed to reject request');
+    }
+  };
+
   // Group messages by date
   const groupedMessages = [];
   let lastDate = null;
@@ -566,44 +649,84 @@ const ChatPage = () => {
           onScroll={handleScroll}
           className="flex-1 overflow-y-auto scrollbar-none px-4 py-2"
         >
-          {/* Load more */}
-          {hasMore && (
-            <div className="flex justify-center pb-4">
-              <button onClick={loadMoreMessages} className="btn-ghost text-xs flex items-center gap-1">
-                Load older messages
-              </button>
-            </div>
-          )}
+          {(() => {
+            const isMember = currentRoom?.members?.some(m => m._id === user?._id || m === user?._id);
+            const isAdmin = user?.isAdmin;
+            const isPrivate = currentRoom?.isPrivate;
+            const isPending = currentRoom?.pendingRequests?.some(id => id === user?._id || id?._id === user?._id);
 
-          {loadingRoom ? (
-            <div className="flex items-center justify-center h-full">
-              <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-            </div>
-          ) : roomMessages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-center">
-              <div className="w-12 h-12 bg-bg-elevated rounded-2xl flex items-center justify-center mb-3 border border-border-subtle">
-                <MessageSquare size={20} className="text-text-muted" />
-              </div>
-              <p className="font-medium text-sm mb-1">No messages yet</p>
-              <p className="text-xs text-text-muted">Be the first to say something!</p>
-            </div>
-          ) : (
-            groupedMessages.map(item =>
-              item.type === 'date'
-                ? <DateSeparator key={item.key} date={item.date} />
-                : <MessageBubble
-                    key={item.key}
-                    message={item.msg}
-                    isOwn={item.msg.sender?._id === user?._id}
-                    currentUser={user}
-                    onReaction={handleReaction}
-                    onReply={(m) => { setReplyTo(m); setEditingMsg(null); setInput(''); inputRef.current?.focus(); }}
-                    onEdit={(m) => { setEditingMsg(m); setInput(m.content); setReplyTo(null); inputRef.current?.focus(); }}
-                    onDelete={handleDelete}
-                    onlineUsers={onlineUsers}
-                  />
-            )
-          )}
+            if (isPrivate && !isMember && !isAdmin) {
+              return (
+                <div className="flex flex-col items-center justify-center h-full text-center px-10">
+                  <div className="w-16 h-16 bg-bg-elevated rounded-2xl flex items-center justify-center mb-4 border border-border-subtle">
+                    <Lock size={28} className="text-warning" />
+                  </div>
+                  <h3 className="font-bold text-lg mb-1">Private Room</h3>
+                  <p className="text-text-muted text-sm mb-6 max-w-sm">
+                    This is a private space. You need to be a member or have an approved request to view the conversation.
+                  </p>
+                  {isPending ? (
+                    <div className="px-6 py-3 bg-white/5 border border-white/10 rounded-xl text-sm font-medium text-warning flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-warning animate-pulse" />
+                      Request Pending Approval
+                    </div>
+                  ) : (
+                    <button onClick={handleRequestJoin} className="btn-primary flex items-center gap-2 px-8">
+                      Request Access to Join
+                    </button>
+                  )}
+                </div>
+              );
+            }
+
+            if (loadingRoom) {
+              return (
+                <div className="flex items-center justify-center h-full">
+                  <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                </div>
+              );
+            }
+
+            if (roomMessages.length === 0) {
+              return (
+                <div className="flex flex-col items-center justify-center h-full text-center">
+                  <div className="w-12 h-12 bg-bg-elevated rounded-2xl flex items-center justify-center mb-3 border border-border-subtle">
+                    <MessageSquare size={20} className="text-text-muted" />
+                  </div>
+                  <p className="font-medium text-sm mb-1">No messages yet</p>
+                  <p className="text-xs text-text-muted">Be the first to say something!</p>
+                </div>
+              );
+            }
+
+            return (
+              <>
+                {/* Load more */}
+                {hasMore && (
+                  <div className="flex justify-center pb-4">
+                    <button onClick={loadMoreMessages} className="btn-ghost text-xs flex items-center gap-1">
+                      Load older messages
+                    </button>
+                  </div>
+                )}
+                {groupedMessages.map(item =>
+                  item.type === 'date'
+                    ? <DateSeparator key={item.key} date={item.date} />
+                    : <MessageBubble
+                        key={item.key}
+                        message={item.msg}
+                        isOwn={item.msg.sender?._id === user?._id}
+                        currentUser={user}
+                        onReaction={handleReaction}
+                        onReply={(m) => { setReplyTo(m); setEditingMsg(null); setInput(''); inputRef.current?.focus(); }}
+                        onEdit={(m) => { setEditingMsg(m); setInput(m.content); setReplyTo(null); inputRef.current?.focus(); }}
+                        onDelete={handleDelete}
+                        onlineUsers={onlineUsers}
+                      />
+                )}
+              </>
+            );
+          })()}
 
           <TypingIndicator users={filteredTyping} />
           <div ref={messagesEndRef} />
@@ -639,41 +762,58 @@ const ChatPage = () => {
         )}
 
         {/* Input */}
-        <div className="px-4 py-3 border-t border-border-subtle flex-shrink-0">
-          <div className="flex items-end gap-2 bg-bg-elevated border border-border-default rounded-2xl px-4 py-2 focus-within:border-border-strong transition-colors">
-            <textarea
-              ref={inputRef}
-              id="chat-message-input"
-              rows={1}
-              className="flex-1 bg-transparent text-sm text-text-primary placeholder-text-muted outline-none resize-none py-1.5 max-h-32 leading-relaxed"
-              placeholder={`Message ${currentRoom?.type === 'direct'
-                ? currentRoom?.members?.find(m => m._id !== user?._id)?.username || 'user'
-                : `#${currentRoom?.name || '...'}`}`}
-              value={input}
-              onChange={e => { setInput(e.target.value); handleTyping(); }}
-              onKeyDown={handleKeyDown}
-              style={{ minHeight: '24px' }}
-              onInput={e => {
-                e.target.style.height = 'auto';
-                e.target.style.height = Math.min(e.target.scrollHeight, 128) + 'px';
-              }}
-            />
-            <button
-              onClick={handleSend}
-              disabled={!input.trim()}
-              id="send-message-btn"
-              className="w-8 h-8 bg-white text-black rounded-xl flex items-center justify-center hover:bg-gray-100 active:scale-95 transition-all disabled:opacity-30 disabled:cursor-not-allowed flex-shrink-0"
-            >
-              <Send size={14} />
-            </button>
-          </div>
-          <p className="text-[10px] text-text-disabled mt-1.5 ml-1">Enter to send · Shift+Enter for newline · Esc to cancel</p>
-        </div>
+        {(() => {
+          const isMember = currentRoom?.members?.some(m => m._id === user?._id || m === user?._id);
+          const isAdmin = user?.isAdmin;
+          const isPrivate = currentRoom?.isPrivate;
+
+          if (isPrivate && !isMember && !isAdmin) return null;
+
+          return (
+            <div className="px-4 py-3 border-t border-border-subtle flex-shrink-0">
+              <div className="flex items-end gap-2 bg-bg-elevated border border-border-default rounded-2xl px-4 py-2 focus-within:border-border-strong transition-colors">
+                <textarea
+                  ref={inputRef}
+                  id="chat-message-input"
+                  rows={1}
+                  className="flex-1 bg-transparent text-sm text-text-primary placeholder-text-muted outline-none resize-none py-1.5 max-h-32 leading-relaxed"
+                  placeholder={`Message ${currentRoom?.type === 'direct'
+                    ? currentRoom?.members?.find(m => m._id !== user?._id)?.username || 'user'
+                    : `#${currentRoom?.name || '...'}`}`}
+                  value={input}
+                  onChange={e => { setInput(e.target.value); handleTyping(); }}
+                  onKeyDown={handleKeyDown}
+                  style={{ minHeight: '24px' }}
+                  onInput={e => {
+                    e.target.style.height = 'auto';
+                    e.target.style.height = Math.min(e.target.scrollHeight, 128) + 'px';
+                  }}
+                />
+                <button
+                  onClick={handleSend}
+                  disabled={!input.trim()}
+                  id="send-message-btn"
+                  className="w-8 h-8 bg-white text-black rounded-xl flex items-center justify-center hover:bg-gray-100 active:scale-95 transition-all disabled:opacity-30 disabled:cursor-not-allowed flex-shrink-0"
+                >
+                  <Send size={14} />
+                </button>
+              </div>
+              <p className="text-[10px] text-text-disabled mt-1.5 ml-1">Enter to send · Shift+Enter for newline · Esc to cancel</p>
+            </div>
+          );
+        })()}
       </div>
 
       {/* Online Members Panel */}
       {showMembers && currentRoom?.type !== 'direct' && (
-        <OnlineUsersPanel room={currentRoom} onlineUsers={onlineUsers} onDM={handleDM} />
+        <OnlineUsersPanel 
+          room={currentRoom} 
+          onlineUsers={onlineUsers} 
+          onDM={handleDM} 
+          currentUser={user}
+          onAccept={handleAcceptRequest}
+          onReject={handleRejectRequest}
+        />
       )}
 
       {/* Create Room Modal */}

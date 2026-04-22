@@ -86,7 +86,12 @@ const ProfilePage = () => {
           )}
         </div>
 
-        <h2 className="text-2xl font-bold mb-0.5">{profile.username}</h2>
+        <div className="flex items-center gap-2 mb-0.5">
+          <h2 className="text-2xl font-bold">{profile.username}</h2>
+          {profile.isAdmin && (
+            <span className="px-1.5 py-0.5 bg-white/10 text-white text-[10px] font-black rounded border border-white/20 tracking-wider h-fit mt-1">ADMIN</span>
+          )}
+        </div>
         <p className="text-text-muted text-sm mb-1">{getLevelName(profile.level)} · Level {profile.level}</p>
         {profile.status && <p className="text-sm text-text-secondary mb-1">{profile.status}</p>}
         {profile.bio && <p className="text-sm text-text-muted mb-4 leading-relaxed">{profile.bio}</p>}
